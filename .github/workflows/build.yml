@@ -1,13 +1,19 @@
 ---
 name: build
-on: push
+on:
+  push:
+    # somehow a force to pullrequest for documentational purposes, this means that on a normal branch there is no build
+    branches: 'master'
+  pull_request:
+    branches: '*'
+
 jobs:
 
   yamllint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run: ./yamllint
+      - uses: ibiqlik/action-yamllint@v3
 
   eslint:
     runs-on: ubuntu-latest
@@ -65,18 +71,20 @@ jobs:
           path: 'node_modules'
           key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
       - run: npm install
-      - uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_KEY }}
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+      - run: |
+          FORCE_COLOR=1 npx jest --coverage --testTimeout 90000
+        if: ${{ github.event.pull_request.head.repo.full_name != 'org/repo' }} #only in fork repo
       - run: |
           eval $(ssh-agent -s)
           ssh-add
           FORCE_COLOR=1 npx jest --coverage --testTimeout 90000
+        if: ${{ github.event.pull_request.head.repo.full_name == 'org/repo' }} #only in main repo
       - uses: sonarsource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        if: ${{ github.event.pull_request.head.repo.full_name == 'org/repo' }} #only in main repo
+  
 
   code-ql:
     name: CodeQL
